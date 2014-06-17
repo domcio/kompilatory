@@ -1,0 +1,8 @@
+int i = 1, j = 2;
+
+int fun(int a) {
+    return 1;
+}
+
+i = i + 1;
+j = 1 + i;
