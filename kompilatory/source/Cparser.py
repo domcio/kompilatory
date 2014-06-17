@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-from source.scanner import Scanner
-from source import AST
+from scanner import Scanner
+import AST
 
 
 class Cparser(object):

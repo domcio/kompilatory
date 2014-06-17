@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 import AST
-from source.Memory import *
+from Memory import *
 from visit import *
 
 
