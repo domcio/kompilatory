@@ -81,7 +81,9 @@ GOTO = 'goto'
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
               IF_STR_NEQUAL, GOTO]
-FUN_CALL = 'invokestatic'
+STATIC_CALL = 'invokestatic'
+SPECIAL_CALL = 'invokespecial'
+VIRTUAL_CALL = 'invokevirtual'
 GOTO_VAR = 'ret'  # executes from the address in the variable n - unnecessary shit
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
@@ -89,7 +91,12 @@ RETURN_STR = 'areturn'
 RETURN = 'return'
 GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
 CALL_PRINT = 'invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V'
-
+NEW = 'new'
+DUP_X1  = 'dup_x1'
+STRING_BUILDER = 'java/lang/StringBuilder'
+INIT = '<init>()V'
+APPEND_PROTOTYPE = "append(Ljava/lang/String;)Ljava/lang/StringBuilder;"
+TO_STRING_PROTOTYPE = "toString()Ljava/lang/String;"
 
 class Function(object):
     def __init__(self, name, type):
@@ -343,8 +350,23 @@ class Translator(object):
             self.printInstruction(op)
         self.printJump(self.relationCodes[operation][type], label)
 
+    # this is ugly, but the Java compiler does this similarly
     def printOperation(self, operation, type):
-        self.printInstruction(self.operationCodes[operation][type])
+        if type == 'string' and operation == '+':
+            self.stack.register("___string1", "string")
+            self.stack.register("___string2", "string")
+            self.storeTopOfStack("___string1")
+            self.storeTopOfStack("___string2")
+            self.printInstruction(NEW, STRING_BUILDER)
+            self.printInstruction(DUP)
+            self.printInstruction(SPECIAL_CALL, STRING_BUILDER + "/" + INIT)
+            self.loadOntoStack("___string2")
+            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
+            self.loadOntoStack("___string1")
+            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
+            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + TO_STRING_PROTOTYPE)
+        else:
+            self.printInstruction(self.operationCodes[operation][type])
 
 
     @on('node')
@@ -552,7 +574,7 @@ class Translator(object):
                 expr.accept(self)
         lookup = self.stack.lookupFun(node.id)
         lineno = lookup[1]
-        self.printInstruction(FUN_CALL, self.getMethodForCall(node.id))
+        self.printInstruction(STATIC_CALL, self.getMethodForCall(node.id))
         return lookup[0]
 
 

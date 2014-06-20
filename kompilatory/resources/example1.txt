@@ -1,5 +1,6 @@
 int i = 0;
 string str = "jakis napis";
+string str2 = "co innego";
 int dududu = 4;
 float kakaka = 6.5463;
 int bebebe = 13;
@@ -13,14 +14,19 @@ int g(int x) {
 	return f(x);
 }
 
+string add(string a, string b) {
+    return a + b;
+}
+
 int f(int x) {
 	return x;
 }
 
 while(i < 10) {
 	int j = 0;
+	print str;
     print "i";
-	print i;
+	print add(str, str2);
     if (i == 5)
         break;
 	while(j < 10) {
