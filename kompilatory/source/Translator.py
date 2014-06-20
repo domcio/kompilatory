@@ -448,9 +448,9 @@ class Translator(object):
     @when(AST.Integer)
     def visit(self, node):
         val = int(node.value)
-        if (val < 6 and val > -2):
+        if 6 > val > -2:
             self.printInstruction(PUSH_INT_CONST[val+1])
-        elif (val > -129 and val < 128):
+        elif -129 < val < 128:
             self.printInstruction(PUSH_BYTE, node.value)
         else:
             self.printInstruction(PUSH_SHORT, node.value)
@@ -461,7 +461,7 @@ class Translator(object):
         if self.stack.lookupConstant(node.value) is None:
             self.stack.registerConstant(node.value)
         index = self.stack.lookupConstant(node.value)
-        self.printInstruction(PUSH_CONST, index)
+        self.printInstruction(PUSH_CONST, node.value)
         return 'float'
         
     @when(AST.String)
@@ -469,7 +469,7 @@ class Translator(object):
         if self.stack.lookupConstant(node.value) is None:
             self.stack.registerConstant(node.value)
         index = self.stack.lookupConstant(node.value)
-        self.printInstruction(PUSH_CONST, index)
+        self.printInstruction(PUSH_CONST, node.value)
         return 'string'
     
     @when(AST.Variable)

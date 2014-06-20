@@ -1,6 +1,6 @@
 int i = 0;
 string str = "jakis napis";
-float dududu = 4, kakaka = 6;
+float dududu = 4, kakaka = 6.5463;
 int bebebe = 13;
 int kokoko = bebebe | (i ^ kakaka);
 
