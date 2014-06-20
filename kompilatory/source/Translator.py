@@ -4,8 +4,6 @@ import AST
 from Memory import *
 from visit import *
 
-
-
 # types: int, string, float
 
 # ideas for optimisation:
@@ -37,7 +35,6 @@ POP_STR_N = ['astore_0', 'astore_1', 'astore_2', 'astore_3']
 POP = 'pop'
 POP2 = 'pop2'
 DUP = 'dup'
-SWAP = 'swap'
 ADD_INT = 'iadd'
 ADD_FLO = 'fadd'
 SUB_INT = 'isub'
@@ -75,6 +72,7 @@ IF_INT_LEQUAL = 'if_icmple'
 IF_STR_EQUAL = 'if_acmpeq'
 IF_STR_NEQUAL = 'if_acmpne'
 GOTO = 'goto'
+
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
               IF_STR_NEQUAL, GOTO]
@@ -82,8 +80,8 @@ RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
 RETURN_STR = 'areturn'
 RETURN = 'return'
+
 NEW = 'new'
-DUP_X1  = 'dup_x1'
 
 PACKAGE_NAME = ""
 
@@ -96,6 +94,7 @@ CALL_PRINT = VIRTUAL_CALL + ' java/io/PrintStream/println(Ljava/lang/String;)V'
 STRING_BUILDER = 'java/lang/StringBuilder'
 APPEND_PROTOTYPE = "append(Ljava/lang/String;)Ljava/lang/StringBuilder;"
 TO_STRING_PROTOTYPE = "toString()Ljava/lang/String;"
+
 
 class Function(object):
     def __init__(self, name, type):
@@ -133,17 +132,12 @@ class Translator(object):
     def __init__(self):
         self.stack = MemoryStack(Memory('mem1'))
         self.labelno = 0
-        self.label = 'LABEL'
         self.lineno = 0
-        self.commands = []
         self.functions = []
-        self.labels = [0 for x in xrange(0, 11)]
 
         self.operationCodes = defaultdict(lambda: defaultdict())
         self.relationCodes = defaultdict(lambda: defaultdict())
         self.loadStoreCodes = defaultdict(lambda: defaultdict())
-        self.argName = {}
-        # self.argName['int'] =
 
         self.operationCodes['+']['float'] = ADD_FLO
         self.operationCodes['-']['float'] = SUB_FLO
@@ -210,70 +204,16 @@ class Translator(object):
         function = filter(lambda x: x.name == name, self.functions)[0]
         return PACKAGE_NAME + "Main/" + self.getMethodNameArgs(function)
 
-
     def printInstruction(self, instr, arg=None):  # non-jump instruction
         binstr = BInstruction(instr, arg)
-        self.commands.append(binstr)
         self.functions[-1].addInstruction(binstr)
-        self.lineno += 1
 
-
-    def printLabel(self, name):  # label - don't include in the final code, only remember the line number
+    def printLabel(self, name):
         self.functions[-1].addInstruction(LabelInstruction(name))
-        # self.labels[name] = self.lineno
 
-
-    def printJump(self, instr, label):  # jump instructions - indicate the jump with a 2-element tuple,
-        # for later change
+    def printJump(self, instr, label):
         binstr = BInstruction(instr, label)
-        self.commands.append(binstr)
         self.functions[-1].addInstruction(binstr)
-        self.lineno += 1
-
-
-    def printModuleStart(self, name):
-        binstr = BInstruction('start module', name.upper())
-        self.commands.append(binstr)
-        self.lineno += 1
-
-
-    def printModuleEnd(self):
-        binstr = BInstruction('end module')
-        self.commands.append(binstr)
-        self.lineno += 1
-
-
-    # def optimizeIncrementation(self):
-
-    def optimizeJumps(self):  # todo delete the labels rendered unnecessary by this optimization
-        changed = False
-        for x in xrange(0, len(self.commands)):
-            cmd = self.commands[x]
-            if cmd.code in JUMP_INSTR:
-                dstindex = self.labels[cmd.arg]  # index out of bounds...
-                if dstindex >= len(self.commands):
-                    continue
-                dstcmd = self.commands[dstindex]
-                if dstcmd.code == GOTO:
-                    changed = True
-                    cmd.arg = dstcmd.arg
-                    break
-        if changed:
-            self.optimizeJumps()
-
-
-    def shiftLabels(self, index):
-        for x in xrange(0, self.labelno):
-            if self.labels[x] >= index:
-                self.labels[x] -= 1
-
-
-    def resolveLabels(self):  # resolve label names to line numbers
-        for x in xrange(0, len(self.commands)):
-            command = self.commands[x]
-            if command.code in JUMP_INSTR:
-                command.arg = self.labels[command.arg]
-
 
     def printCommands(self, file):
         out = open(file, "w")
@@ -290,25 +230,10 @@ class Translator(object):
             out.write(".end method\n\n")
         out.close()
 
-    def printConstants(self):
-        print 'Constants:'
-        for i in xrange(0, len(self.stack.constants)):
-            print str(i) + ' = ' + self.stack.constants[i]
-
-
-    def printEndCode(self, file):  # optimize and print instructions
-        # self.optimizeJumps()
-        # self.resolveLabels()
-        # self.printConstants()
-        self.printCommands(file)
-
-
-    def getLabelName(
-            self):  # generates label names, which are converted to line numbers in the second pass (printEndCode)
+    def getLabelName(self):
         name = "Label" + str(self.labelno)
         self.labelno += 1
         return name
-
 
     def storeTopOfStack(self, name):
         lookup = self.stack.lookup(name)
@@ -319,7 +244,6 @@ class Translator(object):
         else:
             code = self.loadStoreCodes['store'][type]
         self.printInstruction(code, str(index) if index >= 4 else None)
-
 
     def loadOntoStack(self, name):
         lookup = self.stack.lookup(name)
@@ -333,8 +257,6 @@ class Translator(object):
 
         # prints the comparison instruction, appropriate to type and operation, and
         # a jump to the label
-
-
     def makeComparisonAndJump(self, type, operation, label):
         if type == "float":
             op = COMP_FLO_GR if operation[0] == '>' else COMP_FLO_LE
@@ -373,18 +295,15 @@ class Translator(object):
         node.instructions.accept(self)
         self.printInstruction(RETURN)
 
-
     @when(AST.DeclarationList)
     def visit(self, node):
         for declaration in node.declarations:
             declaration.accept(self)
 
-
     @when(AST.Declaration)
     def visit(self, node):
         self.currType = node.type
         node.inits.accept(self)
-
 
     @when(AST.InitList)
     def visit(self, node):
@@ -564,7 +483,6 @@ class Translator(object):
             for expr in node.inside.expressions:
                 expr.accept(self)
         lookup = self.stack.lookupFun(node.id)
-        lineno = lookup[1]
         self.printInstruction(STATIC_CALL, self.getMethodForCall(node.id))
         return lookup[0]
 
@@ -619,24 +537,19 @@ class Translator(object):
 
     @when(AST.FunDef)
     def visit(self, node):
-        self.printModuleStart(node.id.upper())
         newFunction = Function(node.id, node.type)
         self.functions.append(newFunction)
         self.addArguments(node.args)
-        self.retType = node.type
         self.stack.registerFun(node.id, node.type, self.lineno)
         self.stack.push(Memory('mem1'))
         node.args.accept(self)
         node.comp_instrs.accept(self)
-        self.printModuleEnd()
         self.stack.pop()
-
 
     @when(AST.ArgumentList)
     def visit(self, node):
         for arg in node.args:
             arg.accept(self)
-
 
     @when(AST.Argument)
     def visit(self, node):

@@ -23,4 +23,4 @@ if __name__ == '__main__':
 
     translator = Translator()
     ast.accept(translator)
-    translator.printEndCode(sys.argv[2] if len(sys.argv) > 2 else "../out/Main.j")
+    translator.printCommands(sys.argv[2] if len(sys.argv) > 2 else "../out/Main.j")
