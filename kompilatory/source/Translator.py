@@ -86,6 +86,7 @@ GOTO_VAR = 'ret'  # executes from the address in the variable n - unnecessary sh
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
 RETURN_STR = 'areturn'
+RETURN = 'return'
 GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
 CALL_PRINT = 'invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V'
 
@@ -358,6 +359,7 @@ class Translator(object):
         self.functions.append(Function("main", "void"))
         node.declarations.accept(self)
         node.instructions.accept(self)
+        self.printInstruction(RETURN)
 
 
     @when(AST.DeclarationList)

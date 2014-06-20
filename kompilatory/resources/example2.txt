@@ -4,5 +4,6 @@ int fun(int a) {
     return 1;
 }
 
+print "Hello";
 i = i + 1;
 j = 1 + i;
