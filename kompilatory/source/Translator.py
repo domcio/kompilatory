@@ -76,11 +76,12 @@ IF_INT_GREATER = 'if_icmpgt'
 IF_INT_LEQUAL = 'if_icmple'
 IF_STR_EQUAL = 'if_acmpeq'
 IF_STR_NEQUAL = 'if_acmpne'
+PACKAGE_NAME = "some/package"
 GOTO = 'goto'
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
               IF_STR_NEQUAL, GOTO]
-FUN_CALL = 'jsr'
+FUN_CALL = 'invokestatic'
 GOTO_VAR = 'ret'  # executes from the address in the variable n - unnecessary shit
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
@@ -107,6 +108,18 @@ class BInstruction(object):
     def __init__(self, cmd, arg=None):
         self.code = cmd
         self.arg = arg
+
+    def _print(self):
+        argstr = '' if self.arg is None else str(self.arg)
+        print "\t" + self.code + ' ' + argstr
+
+
+class LabelInstruction(object):
+    def __init__(self, name):
+        self.name = name
+
+    def _print(self):
+        print self.name + ":"
 
 
 class Translator(object):
@@ -175,15 +188,30 @@ class Translator(object):
         self.loadStoreCodes['load']['string'] = PUSH_STR
         self.loadStoreCodes['loadn']['string'] = PUSH_STR_N
 
+    def getShortTypeName(self, type):
+        return type[0].upper() if type != "string" else "Ljava/lang/String;"
+
+    def getMethodNameArgs(self, function):
+        args = "".join([self.getShortTypeName(i) for i in
+                        function.arguments]) if function.name != "main" else "[Ljava/lang/String;"
+        return function.name + "(" + args + ")" + self.getShortTypeName(function.type)
+
+    def getMethodForCall(self, name):
+        function = filter(lambda x: x.name == name, self.functions)[0]
+        return PACKAGE_NAME + "/Main/" + self.getMethodNameArgs(function)
+
+
     def printInstruction(self, instr, arg=None):  # non-jump instruction
         binstr = BInstruction(instr, arg)
         self.commands.append(binstr)
         self.functions[-1].addInstruction(binstr)
         self.lineno += 1
 
+
     def printLabel(self, name):  # label - don't include in the final code, only remember the line number
-        self.functions[-1].addInstruction(BInstruction(name))
+        self.functions[-1].addInstruction(LabelInstruction(name))
         # self.labels[name] = self.lineno
+
 
     def printJump(self, instr, label):  # jump instructions - indicate the jump with a 2-element tuple,
         # for later change
@@ -192,15 +220,18 @@ class Translator(object):
         self.functions[-1].addInstruction(binstr)
         self.lineno += 1
 
+
     def printModuleStart(self, name):
         binstr = BInstruction('start module', name.upper())
         self.commands.append(binstr)
         self.lineno += 1
 
+
     def printModuleEnd(self):
         binstr = BInstruction('end module')
         self.commands.append(binstr)
         self.lineno += 1
+
 
     # def optimizeIncrementation(self):
 
@@ -220,10 +251,12 @@ class Translator(object):
         if changed:
             self.optimizeJumps()
 
+
     def shiftLabels(self, index):
         for x in xrange(0, self.labelno):
             if self.labels[x] >= index:
                 self.labels[x] -= 1
+
 
     def resolveLabels(self):  # resolve label names to line numbers
         for x in xrange(0, len(self.commands)):
@@ -231,23 +264,21 @@ class Translator(object):
             if command.code in JUMP_INSTR:
                 command.arg = self.labels[command.arg]
 
+
     def printCommands(self):
         # lineno = 0
         # for cmd in self.commands:
-        #     argstr = '' if cmd.arg is None else str(cmd.arg)
-        #     print str(lineno) + ":\t" + cmd.code + ' ' + argstr
-        #     lineno+=1
+        # argstr = '' if cmd.arg is None else str(cmd.arg)
+        # print str(lineno) + ":\t" + cmd.code + ' ' + argstr
+        # lineno+=1
 
         print ".class public Main.j"
         print ".super java/lang/Object"
         for function in self.functions:
-            args = "".join([i[0].upper() if i != "string" else "Ljava/lang/String;" for i in
-                            function.arguments]) if function.name != "main" else "[Ljava/lang/String;"
-            print ".method public static " + function.name + "(" + args + ")" + function.type[0].upper()
+            print ".method public static " + self.getMethodNameArgs(function)
             for cmd in function.code:
-                argstr = '' if cmd.arg is None else str(cmd.arg)
-                print "\t" + cmd.code + ' ' + argstr
-            print ".end method"
+                cmd._print()
+            print ".end method\n"
 
 
     def printConstants(self):
@@ -255,17 +286,20 @@ class Translator(object):
         for i in xrange(0, len(self.stack.constants)):
             print str(i) + ' = ' + self.stack.constants[i]
 
+
     def printEndCode(self):  # optimize and print instructions
         # self.optimizeJumps()
         # self.resolveLabels()
         # self.printConstants()
         self.printCommands()
 
+
     def getLabelName(
             self):  # generates label names, which are converted to line numbers in the second pass (printEndCode)
         name = "Label" + str(self.labelno)
         self.labelno += 1
         return name
+
 
     def storeTopOfStack(self, name):
         lookup = self.stack.lookup(name)
@@ -276,6 +310,7 @@ class Translator(object):
         else:
             code = self.loadStoreCodes['store'][type]
         self.printInstruction(code, str(index) if index >= 4 else None)
+
 
     def loadOntoStack(self, name):
         lookup = self.stack.lookup(name)
@@ -290,15 +325,19 @@ class Translator(object):
         # prints the comparison instruction, appropriate to type and operation, and
         # a jump to the label
 
+
     def makeComparisonAndJump(self, type, operation, label):
         self.printJump(self.relationCodes[operation][type], label)
+
 
     def printOperation(self, operation, type):
         self.printInstruction(self.operationCodes[operation][type])
 
+
     @on('node')
     def visit(self, node):
         pass
+
 
     @when(AST.Program)
     def visit(self, node):
@@ -307,20 +346,24 @@ class Translator(object):
         node.declarations.accept(self)
         node.instructions.accept(self)
 
+
     @when(AST.DeclarationList)
     def visit(self, node):
         for declaration in node.declarations:
             declaration.accept(self)
+
 
     @when(AST.Declaration)
     def visit(self, node):
         self.currType = node.type
         node.inits.accept(self)
 
+
     @when(AST.InitList)
     def visit(self, node):
         for init in node.inits:
             init.accept(self)
+
 
     @when(AST.Init)
     def visit(self, node):
@@ -328,10 +371,12 @@ class Translator(object):
         index = self.stack.register(node.id, self.currType)
         self.storeTopOfStack(node.id)  # put what we have on top of stack in the index
 
+
     @when(AST.InstructionList)
     def visit(self, node):
         for instr in node.instructions:
             instr.accept(self)
+
 
     @when(AST.PrintInstr)
     def visit(self, node):
@@ -339,16 +384,19 @@ class Translator(object):
         node.expr.accept(self)  # get the result of expression on the stack
         self.printInstruction(CALL_PRINT)
 
+
     @when(AST.LabeledInstr)  # pointless...
     def visit(self, node):
         label = self.getLabelName()
         self.printLabel(label)
         node.instr.accept(self)
 
+
     @when(AST.Assignment)
     def visit(self, node):
         node.expr.accept(self)
         self.storeTopOfStack(node.id)
+
 
     # we assume the condition will always be inside if, not another expression or condition
     # because otherwise we don't have a way to store the intermediate boolean values (no bool :#)
@@ -379,6 +427,7 @@ class Translator(object):
             node.elseclause.accept(self)
             self.printLabel(elseend)
 
+
     @when(AST.WhileInstr)
     def visit(self, node):
         start = self.getLabelName()
@@ -388,13 +437,13 @@ class Translator(object):
         self.continueLabel = condition
 
         # shorter, but has jump in the beginning and condition at the end :)
-        #    self.printJump(GOTO, condition)
-        #    self.printLabel(start)
-        #    node.instruction.accept(self)
-        #    self.printLabel(condition)
-        #    type = node.condition.accept(self)
-        #    self.makeComparisonAndJump(type, node.condition.op , start)
-        #    self.printLabel(end)
+        # self.printJump(GOTO, condition)
+        # self.printLabel(start)
+        # node.instruction.accept(self)
+        # self.printLabel(condition)
+        # type = node.condition.accept(self)
+        # self.makeComparisonAndJump(type, node.condition.op , start)
+        # self.printLabel(end)
 
         # longer, but more natural
         self.printLabel(condition)
@@ -418,13 +467,16 @@ class Translator(object):
         else:
             self.printInstruction(RETURN_STR)
 
+
     @when(AST.ContinueInstr)
     def visit(self, node):
         self.printJump(GOTO, self.continueLabel)
 
+
     @when(AST.BreakInstr)
     def visit(self, node):
         self.printJump(GOTO, self.breakLabel)
+
 
     @when(AST.CompoundInstr)
     def visit(self, node):
@@ -433,10 +485,12 @@ class Translator(object):
         if node.instructions is not None:
             node.instructions.accept(self)
 
+
     @when(AST.ExpressionList)
     def visit(self, node):
         for expr in node.expressions:
             expr.accept(self)
+
 
     @when(AST.BinExpr)
     def visit(self, node):
@@ -451,6 +505,7 @@ class Translator(object):
         else:
             print 'error - wrong types'
 
+
     @when(AST.RelExpr)
     def visit(self, node):  # push the two sides onto the stack, surrounding if will make the comparison and jump
         ltype = node.right.accept(self)
@@ -462,9 +517,11 @@ class Translator(object):
         else:
             print 'error - wrong types' + ltype + ' ' + rtype
 
+
     @when(AST.GroupingExpr)
     def visit(self, node):
         return node.inside.accept(self)
+
 
     @when(AST.FunCallExpr)
     def visit(self, node):
@@ -474,12 +531,14 @@ class Translator(object):
                 expr.accept(self)
         lookup = self.stack.lookupFun(node.id)
         lineno = lookup[1]
-        self.printInstruction(FUN_CALL, node.id)
+        self.printInstruction(FUN_CALL, self.getMethodForCall(node.id))
         return lookup[0]
+
 
     @when(AST.Const)
     def visit(self, node):
         return node.value.accept(self)
+
 
     @when(AST.Integer)
     def visit(self, node):
@@ -492,6 +551,7 @@ class Translator(object):
             self.printInstruction(PUSH_SHORT, node.value)
         return 'int'
 
+
     @when(AST.Float)
     def visit(self, node):  # todo use the fconst_0-2 codes
         if self.stack.lookupConstant(node.value) is None:
@@ -499,6 +559,7 @@ class Translator(object):
         index = self.stack.lookupConstant(node.value)
         self.printInstruction(PUSH_CONST, node.value)
         return 'float'
+
 
     @when(AST.String)
     def visit(self, node):
@@ -508,16 +569,19 @@ class Translator(object):
         self.printInstruction(PUSH_CONST, node.value)
         return 'string'
 
+
     @when(AST.Variable)
     def visit(self, node):
         lookup = self.stack.lookup(node.value)
         self.loadOntoStack(node.value)
         return lookup[0]
 
+
     @when(AST.FunDefList)
     def visit(self, node):
         for fundef in node.fundefs:
             fundef.accept(self)
+
 
     @when(AST.FunDef)
     def visit(self, node):
@@ -533,16 +597,18 @@ class Translator(object):
         self.printModuleEnd()
         self.stack.pop()
 
+
     @when(AST.ArgumentList)
     def visit(self, node):
         for arg in node.args:
             arg.accept(self)
 
+
     @when(AST.Argument)
     def visit(self, node):
         self.stack.register(node.id, node.type)
 
+
     def addArguments(self, arglist):
         for arg in arglist.args:
             self.functions[-1].addArgument(arg.type)
-        
