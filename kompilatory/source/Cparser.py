@@ -250,10 +250,10 @@ class Cparser(object):
                      | arg """
         if len(p)==4:
             p[0] = AST.ArgumentList() if p[1] is None else p[1]
-            p[0].addArgument(p[3])
+            p[0].add_argument(p[3])
         else:
             p[0] = AST.ArgumentList()
-            p[0].addArgument(p[1])
+            p[0].add_argument(p[1])
             
     def p_arg(self, p):
         """arg : TYPE ID """

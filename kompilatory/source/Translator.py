@@ -97,19 +97,20 @@ TO_STRING_PROTOTYPE = "toString()Ljava/lang/String;"
 
 
 class Function(object):
-    def __init__(self, name, type):
+    def __init__(self, name, returned_type):
         self.name = name
-        self.type = type
+        self.type = returned_type
         self.code = []
         self.arguments = []
         self.variables = 0
 
-    def addInstruction(self, instr):
+    def add_instruction(self, instr):
         self.code.append(instr)
 
-    def addArgument(self, arg):
+    def add_argument(self, arg):
         self.arguments.append(arg)
         self.variables += 1
+
 
 class BInstruction(object):
     def __init__(self, cmd, arg=None):
@@ -129,12 +130,29 @@ class LabelInstruction(object):
         return self.name + ":"
 
 
+def get_short_type_name(type_name):
+    return type_name[0].upper() if type_name != "string" else "Ljava/lang/String;"
+
+
+def call_print(type_name):
+    return 'invokevirtual java/io/PrintStream/println(' + get_short_type_name(type_name) + ')V'
+
+
+def get_method_name_args(function):
+    args = "".join([get_short_type_name(i) for i in
+                    function.arguments]) if function.name != "main" else "[Ljava/lang/String;"
+    return function.name + "(" + args + ")" + get_short_type_name(function.type)
+
+
 class Translator(object):
     def __init__(self):
         self.stack = MemoryStack(Memory('mem1'))
         self.labelno = 0
         self.lineno = 0
         self.functions = []
+        self.current_init_type = ''
+        self.break_label = None
+        self.continue_label = None
 
         self.operationCodes = defaultdict(lambda: defaultdict())
         self.relationCodes = defaultdict(lambda: defaultdict())
@@ -188,40 +206,29 @@ class Translator(object):
         self.loadStoreCodes['load']['string'] = PUSH_STR
         self.loadStoreCodes['loadn']['string'] = PUSH_STR_N
 
-    def callPrint(self, type):
-        return 'invokevirtual java/io/PrintStream/println(' + self.getShortTypeName(type) + ')V'
-
-    def getShortTypeName(self, type):
-        return type[0].upper() if type != "string" else "Ljava/lang/String;"
-
-    def getMethodNameArgs(self, function):
-        args = "".join([self.getShortTypeName(i) for i in
-                        function.arguments]) if function.name != "main" else "[Ljava/lang/String;"
-        return function.name + "(" + args + ")" + self.getShortTypeName(function.type)
-
-    def getMethodForCall(self, name):
+    def get_method_for_call(self, name):
         function = filter(lambda x: x.name == name, self.functions)[0]
-        return PACKAGE_NAME + "Main/" + self.getMethodNameArgs(function)
+        return PACKAGE_NAME + "Main/" + get_method_name_args(function)
 
-    def printInstruction(self, instr, arg=None):  # non-jump instruction
+    def print_instruction(self, instr, arg=None):  # non-jump instruction
         binstr = BInstruction(instr, arg)
-        self.functions[-1].addInstruction(binstr)
+        self.functions[-1].add_instruction(binstr)
 
-    def printLabel(self, name):
-        self.functions[-1].addInstruction(LabelInstruction(name))
+    def print_label(self, name):
+        self.functions[-1].add_instruction(LabelInstruction(name))
 
-    def printJump(self, instr, label):
+    def print_jump(self, instr, label):
         binstr = BInstruction(instr, label)
-        self.functions[-1].addInstruction(binstr)
+        self.functions[-1].add_instruction(binstr)
 
-    def printCommands(self, file):
-        out = open(file, "w")
+    def print_commands(self, filename):
+        out = open(filename, "w")
 
         out.write(".class public Main\n")
         out.write(".super java/lang/Object\n")
 
         for function in self.functions:
-            out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
+            out.write(".method public static " + get_method_name_args(function) + "\n")
             out.write(".limit stack 5\n")
             out.write(".limit locals " + str(function.variables) + "\n")
             for cmd in function.code:
@@ -229,62 +236,61 @@ class Translator(object):
             out.write(".end method\n\n")
         out.close()
 
-    def getLabelName(self):
+    def get_label_name(self):
         name = "Label" + str(self.labelno)
         self.labelno += 1
         return name
 
-    def storeTopOfStack(self, name):
+    def store_top_of_stack(self, name):
         lookup = self.stack.lookup(name)
-        type = lookup[0]
+        variable_type = lookup[0]
         index = lookup[1]
         if index < 4:
-            code = self.loadStoreCodes['storen'][type][index]
+            code = self.loadStoreCodes['storen'][variable_type][index]
         else:
-            code = self.loadStoreCodes['store'][type]
-        self.printInstruction(code, str(index) if index >= 4 else None)
+            code = self.loadStoreCodes['store'][variable_type]
+        self.print_instruction(code, str(index) if index >= 4 else None)
 
-    def loadOntoStack(self, name):
+    def load_onto_stack(self, name):
         lookup = self.stack.lookup(name)
-        type = lookup[0]
+        variable_type = lookup[0]
         index = lookup[1]
         if index < 4:
-            code = self.loadStoreCodes['loadn'][type][index]
+            code = self.loadStoreCodes['loadn'][variable_type][index]
         else:
-            code = self.loadStoreCodes['load'][type]
-        self.printInstruction(code, str(index) if index >= 4 else None)
+            code = self.loadStoreCodes['load'][variable_type]
+        self.print_instruction(code, str(index) if index >= 4 else None)
 
         # prints the comparison instruction, appropriate to type and operation, and
         # a jump to the label
-    def makeComparisonAndJump(self, type, operation, label):
-        if type == "float":
+
+    def make_comparison_and_jump(self, sides_type, operation, label):
+        if sides_type == "float":
             op = COMP_FLO_GR if operation[0] == '>' else COMP_FLO_LE
-            self.printInstruction(op)
-        self.printJump(self.relationCodes[operation][type], label)
+            self.print_instruction(op)
+        self.print_jump(self.relationCodes[operation][sides_type], label)
 
     # this is ugly, but the Java compiler does this similarly
-    def printOperation(self, operation, type):
-        if type == 'string' and operation == '+':
+    def print_operation(self, operation, sides_type):
+        if sides_type == 'string' and operation == '+':
             self.stack.register("___string1", "string")
             self.stack.register("___string2", "string")
-            self.storeTopOfStack("___string1")
-            self.storeTopOfStack("___string2")
-            self.printInstruction(NEW, STRING_BUILDER)
-            self.printInstruction(DUP)
-            self.printInstruction(SPECIAL_CALL, STRING_BUILDER + "/" + INIT)
-            self.loadOntoStack("___string2")
-            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
-            self.loadOntoStack("___string1")
-            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
-            self.printInstruction(VIRTUAL_CALL, STRING_BUILDER + "/" + TO_STRING_PROTOTYPE)
+            self.store_top_of_stack("___string1")
+            self.store_top_of_stack("___string2")
+            self.print_instruction(NEW, STRING_BUILDER)
+            self.print_instruction(DUP)
+            self.print_instruction(SPECIAL_CALL, STRING_BUILDER + "/" + INIT)
+            self.load_onto_stack("___string2")
+            self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
+            self.load_onto_stack("___string1")
+            self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
+            self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + TO_STRING_PROTOTYPE)
         else:
-            self.printInstruction(self.operationCodes[operation][type])
-
+            self.print_instruction(self.operationCodes[operation][sides_type])
 
     @on('node')
     def visit(self, node):
         pass
-
 
     @when(AST.Program)
     def visit(self, node):
@@ -292,7 +298,7 @@ class Translator(object):
         self.functions.append(Function("main", "void"))
         node.declarations.accept(self)
         node.instructions.accept(self)
-        self.printInstruction(RETURN)
+        self.print_instruction(RETURN)
 
     @when(AST.DeclarationList)
     def visit(self, node):
@@ -301,7 +307,7 @@ class Translator(object):
 
     @when(AST.Declaration)
     def visit(self, node):
-        self.currType = node.type
+        self.current_init_type = node.type
         node.inits.accept(self)
 
     @when(AST.InitList)
@@ -309,125 +315,105 @@ class Translator(object):
         for init in node.inits:
             init.accept(self)
 
-
     @when(AST.Init)
     def visit(self, node):
-        value = node.expr.accept(self)  # compute the expression
-        index = self.stack.register(node.id, self.currType)
+        node.expr.accept(self)  # compute the expression
+        self.stack.register(node.id, self.current_init_type)
         self.functions[-1].variables += 1
-        self.storeTopOfStack(node.id)  # put what we have on top of stack in the index
+        self.store_top_of_stack(node.id)  # put what we have on top of stack in the index
 
     @when(AST.InstructionList)
     def visit(self, node):
         for instr in node.instructions:
             instr.accept(self)
 
-
     @when(AST.PrintInstr)
     def visit(self, node):
-        self.printInstruction(GET_PRINT)
-        type = node.expr.accept(self)  # get the result of expression on the stack
-        self.printInstruction(self.callPrint(type))
+        self.print_instruction(GET_PRINT)
+        expression_type = node.expr.accept(self)  # get the result of expression on the stack
+        self.print_instruction(call_print(expression_type))
 
     @when(AST.LabeledInstr)  # pointless...
     def visit(self, node):
-        label = self.getLabelName()
-        self.printLabel(label)
+        label = self.get_label_name()
+        self.print_label(label)
         node.instr.accept(self)
-
 
     @when(AST.Assignment)
     def visit(self, node):
         node.expr.accept(self)
-        self.storeTopOfStack(node.id)
-
+        self.store_top_of_stack(node.id)
 
     # we assume the condition will always be inside if, not another expression or condition
     # because otherwise we don't have a way to store the intermediate boolean values (no bool :#)
     @when(AST.ChoiceInstr)
     def visit(self, node):
-        if (node.elseclause == None):
-            type = node.ifclause.accept(self)  # two sides of the relation are on the stack
-            thenend = self.getLabelName()
-            thenstart = self.getLabelName()
-            self.makeComparisonAndJump(type, node.ifclause.op, thenstart)
-            self.printJump(GOTO, thenend)
-            self.printLabel(thenstart)
+        if node.elseclause is None:
+            condition_type = node.ifclause.accept(self)  # two sides of the relation are on the stack
+            thenend = self.get_label_name()
+            thenstart = self.get_label_name()
+            self.make_comparison_and_jump(condition_type, node.ifclause.op, thenstart)
+            self.print_jump(GOTO, thenend)
+            self.print_label(thenstart)
             node.thenclause.accept(self)
-            self.printLabel(thenend)
+            self.print_label(thenend)
         else:
-            type = node.ifclause.accept(self)
-            thenstart = self.getLabelName()
-            thenend = self.getLabelName()
-            elsestart = self.getLabelName()
-            elseend = self.getLabelName()
+            condition_type = node.ifclause.accept(self)
+            thenstart = self.get_label_name()
+            elsestart = self.get_label_name()
+            elseend = self.get_label_name()
 
-            self.makeComparisonAndJump(type, node.ifclause.op, thenstart)
-            self.printJump(GOTO, elsestart)
-            self.printLabel(thenstart)
+            self.make_comparison_and_jump(condition_type, node.ifclause.op, thenstart)
+            self.print_jump(GOTO, elsestart)
+            self.print_label(thenstart)
             node.thenclause.accept(self)
-            self.printJump(GOTO, elseend)
-            self.printLabel(elsestart)
+            self.print_jump(GOTO, elseend)
+            self.print_label(elsestart)
             node.elseclause.accept(self)
-            self.printLabel(elseend)
-
+            self.print_label(elseend)
 
     @when(AST.WhileInstr)
     def visit(self, node):
-        start = self.getLabelName()
-        end = self.getLabelName()
-        condition = self.getLabelName()
-        self.breakLabel = end
-        self.continueLabel = condition
+        start = self.get_label_name()
+        end = self.get_label_name()
+        condition = self.get_label_name()
+        self.break_label = end
+        self.continue_label = condition
 
-        # shorter, but has jump in the beginning and condition at the end :)
-        # self.printJump(GOTO, condition)
-        # self.printLabel(start)
-        # node.instruction.accept(self)
-        # self.printLabel(condition)
-        # type = node.condition.accept(self)
-        # self.makeComparisonAndJump(type, node.condition.op , start)
-        # self.printLabel(end)
-
-        # longer, but more natural
-        self.printLabel(condition)
-        type = node.condition.accept(self)
-        self.makeComparisonAndJump(type, node.condition.op, start)
-        self.printJump(GOTO, end)
-        self.printLabel(start)
+        self.print_label(condition)
+        condition_type = node.condition.accept(self)
+        self.make_comparison_and_jump(condition_type, node.condition.op, start)
+        self.print_jump(GOTO, end)
+        self.print_label(start)
         node.instruction.accept(self)
-        self.printJump(GOTO, condition)
-        self.printLabel(end)
-
+        self.print_jump(GOTO, condition)
+        self.print_label(end)
 
     @when(AST.ReturnInstr)
     def visit(self, node):
-        type = None
+        expression_type = None
         if node.expression is not None:
-            type = node.expression.accept(self)
-        if type == 'int' and self.functions[-1].type == 'int':
-            self.printInstruction(RETURN_INT)
-        elif type == 'float' and self.functions[-1].type == 'float':
-            self.printInstruction(RETURN_FLO)
-        elif type == 'int' and self.functions[-1].type == 'float':
-            self.printInstruction(INT2FLO)
-            self.printInstruction(RETURN_FLO)
-        elif type == 'float' and self.functions[-1].type == 'int':
-            self.printInstruction(FLO2INT)
-            self.printInstruction(RETURN_FLO)
+            expression_type = node.expression.accept(self)
+        if expression_type == 'int' and self.functions[-1].type == 'int':
+            self.print_instruction(RETURN_INT)
+        elif expression_type == 'float' and self.functions[-1].type == 'float':
+            self.print_instruction(RETURN_FLO)
+        elif expression_type == 'int' and self.functions[-1].type == 'float':
+            self.print_instruction(INT2FLO)
+            self.print_instruction(RETURN_FLO)
+        elif expression_type == 'float' and self.functions[-1].type == 'int':
+            self.print_instruction(FLO2INT)
+            self.print_instruction(RETURN_FLO)
         else:
-            self.printInstruction(RETURN_STR)
-
+            self.print_instruction(RETURN_STR)
 
     @when(AST.ContinueInstr)
-    def visit(self, node):
-        self.printJump(GOTO, self.continueLabel)
-
+    def visit(self):
+        self.print_jump(GOTO, self.continue_label)
 
     @when(AST.BreakInstr)
-    def visit(self, node):
-        self.printJump(GOTO, self.breakLabel)
-
+    def visit(self):
+        self.print_jump(GOTO, self.break_label)
 
     @when(AST.CompoundInstr)
     def visit(self, node):
@@ -436,87 +422,78 @@ class Translator(object):
         if node.instructions is not None:
             node.instructions.accept(self)
 
-
     @when(AST.ExpressionList)
     def visit(self, node):
         for expr in node.expressions:
             expr.accept(self)
 
-
     @when(AST.BinExpr)
     def visit(self, node):
         rtype = node.left.accept(self)
         ltype = node.right.accept(self)
-        if (ltype == rtype):
-            self.printOperation(node.op, ltype)
+        if ltype == rtype:
+            self.print_operation(node.op, ltype)
             return ltype
         elif (ltype == 'int' and rtype == 'float') or (rtype == 'int' and ltype == 'float'):
-            self.printOperation(node.op, 'int')
+            self.print_operation(node.op, 'int')
             return 'int'
         else:
             print 'error - wrong types'
-
 
     @when(AST.RelExpr)
     def visit(self, node):  # push the two sides onto the stack, surrounding if will make the comparison and jump
         rtype = node.left.accept(self)
         ltype = node.right.accept(self)
-        if (ltype == rtype):
+        if ltype == rtype:
             return ltype
         elif (ltype == 'int' and rtype == 'float') or (rtype == 'int' and ltype == 'float'):
             return 'int'
         else:
             print 'error - wrong types' + ltype + ' ' + rtype
 
-
     @when(AST.GroupingExpr)
     def visit(self, node):
         return node.inside.accept(self)
 
-
     @when(AST.FunCallExpr)
     def visit(self, node):
-        if (node.inside != None):
+        if node.inside is not None:
             # push the arguments onto the stack
             for expr in node.inside.expressions:
                 expr.accept(self)
         function = filter(lambda x: x.name == node.id, self.functions)[0]
-        self.printInstruction(STATIC_CALL, self.getMethodForCall(node.id))
+        self.print_instruction(STATIC_CALL, self.get_method_for_call(node.id))
         return function.type
 
     @when(AST.Const)
     def visit(self, node):
         return node.value.accept(self)
 
-
     @when(AST.Integer)
     def visit(self, node):
         val = int(node.value)
         if 6 > val > -2:
-            self.printInstruction(PUSH_INT_CONST[val + 1])
+            self.print_instruction(PUSH_INT_CONST[val + 1])
         elif -129 < val < 128:
-            self.printInstruction(PUSH_BYTE, node.value)
+            self.print_instruction(PUSH_BYTE, node.value)
         else:
-            self.printInstruction(PUSH_SHORT, node.value)
+            self.print_instruction(PUSH_SHORT, node.value)
         return 'int'
-
 
     @when(AST.Float)
     def visit(self, node):  # todo use the fconst_0-2 codes
-        self.printInstruction(PUSH_CONST, node.value)
+        self.print_instruction(PUSH_CONST, node.value)
         return 'float'
-
 
     @when(AST.String)
     def visit(self, node):
-        self.printInstruction(PUSH_CONST, node.value)
+        self.print_instruction(PUSH_CONST, node.value)
         return 'string'
-
 
     @when(AST.Variable)
     def visit(self, node):
         lookup = self.stack.lookup(node.value)
-        self.loadOntoStack(node.value)
+        self.load_onto_stack(node.value)
         return lookup[0]
 
     @when(AST.FunDefList)
@@ -528,7 +505,7 @@ class Translator(object):
     def visit(self, node):
         function = Function(node.id, node.type)
         self.functions.append(function)
-        self.addArguments(node.args)
+        self.add_arguments(node.args)
         self.stack.push(Memory('mem1'))
         node.args.accept(self)
         node.comp_instrs.accept(self)
@@ -543,7 +520,6 @@ class Translator(object):
     def visit(self, node):
         self.stack.register(node.id, node.type)
 
-
-    def addArguments(self, arglist):
+    def add_arguments(self, arglist):
         for arg in arglist.args:
-            self.functions[-1].addArgument(arg.type)
+            self.functions[-1].add_argument(arg.type)
