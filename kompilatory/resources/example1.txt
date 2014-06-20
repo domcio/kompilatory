@@ -1,8 +1,9 @@
 int i = 0;
 string str = "jakis napis";
-float dududu = 4, kakaka = 6.5463;
+int dududu = 4;
+float kakaka = 6.5463;
 int bebebe = 13;
-int kokoko = bebebe | (i ^ kakaka);
+int kokoko = bebebe | (i ^ dududu);
 
 float h(int x) {
 	return g(x);
@@ -16,19 +17,20 @@ int f(int x) {
 	return x;
 }
 
-while(i < 3) {
+while(i < 10) {
 	int j = 0;
-	print "i";
-	print i + 3;
-    if (i == 0)
+    print "i";
+	print i;
+    if (i == 5)
         break;
-	while(j < 3) {
-		print "j";
-		print h(j);
-        if (g(j) != 5)
-            continue;
+	while(j < 10) {
 		j = j + 1;
+		print "j";
+		if (j == 5)
+		    continue;
+		if (j == 7)
+		    break;
+		print j;
 	}
 	i = i + 1;
-    print "i";
 }

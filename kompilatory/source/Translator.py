@@ -188,6 +188,7 @@ class Translator(object):
         self.loadStoreCodes['loadn']['float'] = PUSH_FLO_N
         self.loadStoreCodes['load']['string'] = PUSH_STR
         self.loadStoreCodes['loadn']['string'] = PUSH_STR_N
+        self.variables = 0
 
 
     def callPrint(self, type):
@@ -285,7 +286,7 @@ class Translator(object):
         for function in self.functions:
             out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
             out.write(".limit stack 5\n")
-            out.write(".limit locals 5\n")
+            out.write(".limit locals " + str(self.variables) + "\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
             out.write(".end method\n\n")
@@ -382,6 +383,7 @@ class Translator(object):
     def visit(self, node):
         value = node.expr.accept(self)  # compute the expression
         index = self.stack.register(node.id, self.currType)
+        self.variables += 1
         self.storeTopOfStack(node.id)  # put what we have on top of stack in the index
 
 
@@ -470,11 +472,18 @@ class Translator(object):
 
     @when(AST.ReturnInstr)
     def visit(self, node):
+        type = None
         if node.expression is not None:
-            node.expression.accept(self)
-        if self.retType == 'int':
+            type = node.expression.accept(self)
+        if type == 'int' and self.functions[-1].type == 'int':
             self.printInstruction(RETURN_INT)
-        elif self.retType == 'float':
+        elif type == 'float' and self.functions[-1].type == 'float':
+            self.printInstruction(RETURN_FLO)
+        elif type == 'int' and self.functions[-1].type == 'float':
+            self.printInstruction(INT2FLO)
+            self.printInstruction(RETURN_FLO)
+        elif type == 'float' and self.functions[-1].type == 'int':
+            self.printInstruction(FLO2INT)
             self.printInstruction(RETURN_FLO)
         else:
             self.printInstruction(RETURN_STR)
