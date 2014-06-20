@@ -109,17 +109,17 @@ class BInstruction(object):
         self.code = cmd
         self.arg = arg
 
-    def _print(self):
+    def tostring(self):
         argstr = '' if self.arg is None else str(self.arg)
-        print "\t" + self.code + ' ' + argstr
+        return "\t" + self.code + ' ' + argstr
 
 
 class LabelInstruction(object):
     def __init__(self, name):
         self.name = name
 
-    def _print(self):
-        print self.name + ":"
+    def tostring(self):
+        return self.name + ":"
 
 
 class Translator(object):
@@ -165,10 +165,10 @@ class Translator(object):
         self.relationCodes['==']['int'] = IF_INT_EQUAL
         self.relationCodes['!=']['int'] = IF_INT_NEQUAL
 
-        self.relationCodes['<']['float'] = COMP_FLO_LE
-        self.relationCodes['>']['float'] = COMP_FLO_GR
-        self.relationCodes['<=']['float'] = COMP_FLO_LE
-        self.relationCodes['>=']['float'] = COMP_FLO_GR
+        self.relationCodes['<']['float'] = IF_NEGATIVE
+        self.relationCodes['>']['float'] = IF_POSITIVE
+        self.relationCodes['<=']['float'] = IF_NONPOSITIVE
+        self.relationCodes['>=']['float'] = IF_NONNEGATIVE
 
         self.relationCodes['==']['string'] = IF_STR_EQUAL
         self.relationCodes['!=']['string'] = IF_STR_NEQUAL
@@ -272,14 +272,16 @@ class Translator(object):
         # print str(lineno) + ":\t" + cmd.code + ' ' + argstr
         # lineno+=1
 
-        print ".class public Main.j"
-        print ".super java/lang/Object"
-        for function in self.functions:
-            print ".method public static " + self.getMethodNameArgs(function)
-            for cmd in function.code:
-                cmd._print()
-            print ".end method\n"
+        out = open("Main.j", "w")
 
+        out.write(".class public Main\n")
+        out.write(".super java/lang/Object\n")
+        for function in self.functions:
+            out.write(".method public static " + self.getMethodNameArgs(function)+"\n")
+            for cmd in function.code:
+                out.write(cmd.tostring() + "\n")
+            out.write(".end method\n")
+        out.close()
 
     def printConstants(self):
         print 'Constants:'
@@ -327,8 +329,10 @@ class Translator(object):
 
 
     def makeComparisonAndJump(self, type, operation, label):
+        if type== "float":
+            op = COMP_FLO_GR if operation[0] == '>' else COMP_FLO_LE
+            self.printInstruction(op)
         self.printJump(self.relationCodes[operation][type], label)
-
 
     def printOperation(self, operation, type):
         self.printInstruction(self.operationCodes[operation][type])
