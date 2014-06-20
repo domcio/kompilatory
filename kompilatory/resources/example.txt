@@ -1,5 +1,5 @@
 
-float a = 0, b = 0, c = 0;
+int a = 100, b = 200, c = 300;
 
 int gcd(int m, int n) {
 

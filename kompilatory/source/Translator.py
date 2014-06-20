@@ -17,7 +17,6 @@ from visit import *
 # - nested conditions ((a < b) || (c > d))?
 # - ... for loop :P
 
-NOP = 'nop'
 PUSH_INT_CONST = ['iconst_m1', 'iconst_0', 'iconst_1', 'iconst_2', 'iconst_3', 'iconst_4', 'iconst_5']
 PUSH_FLO_CONST = ['fconst_0', 'fconst_1', 'fconst_2']
 PUSH_BYTE = 'bipush'
@@ -41,7 +40,6 @@ DUP = 'dup'
 SWAP = 'swap'
 ADD_INT = 'iadd'
 ADD_FLO = 'fadd'
-ADD_STR = 'aadd'  # not a part of the actual Java bytecode set, but adding is the only operation for strings we implement, so we can treat them as any next primitive type.
 SUB_INT = 'isub'
 SUB_FLO = 'fsub'
 MUL_INT = 'imul'
@@ -76,25 +74,26 @@ IF_INT_GREATER = 'if_icmpgt'
 IF_INT_LEQUAL = 'if_icmple'
 IF_STR_EQUAL = 'if_acmpeq'
 IF_STR_NEQUAL = 'if_acmpne'
-PACKAGE_NAME = ""
 GOTO = 'goto'
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
               IF_STR_NEQUAL, GOTO]
-STATIC_CALL = 'invokestatic'
-SPECIAL_CALL = 'invokespecial'
-VIRTUAL_CALL = 'invokevirtual'
-GOTO_VAR = 'ret'  # executes from the address in the variable n - unnecessary shit
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
 RETURN_STR = 'areturn'
 RETURN = 'return'
-GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
-CALL_PRINT = 'invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V'
 NEW = 'new'
 DUP_X1  = 'dup_x1'
-STRING_BUILDER = 'java/lang/StringBuilder'
+
+PACKAGE_NAME = ""
+
+STATIC_CALL = 'invokestatic'
+SPECIAL_CALL = 'invokespecial'
+VIRTUAL_CALL = 'invokevirtual'
 INIT = '<init>()V'
+GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
+CALL_PRINT = VIRTUAL_CALL + ' java/io/PrintStream/println(Ljava/lang/String;)V'
+STRING_BUILDER = 'java/lang/StringBuilder'
 APPEND_PROTOTYPE = "append(Ljava/lang/String;)Ljava/lang/StringBuilder;"
 TO_STRING_PROTOTYPE = "toString()Ljava/lang/String;"
 
@@ -163,8 +162,6 @@ class Translator(object):
         self.operationCodes['|']['int'] = OR_INT
         self.operationCodes['<<']['int'] = SHL_INT
         self.operationCodes['>>']['int'] = SHR_INT
-
-        self.operationCodes['+']['string'] = ADD_STR
 
         self.relationCodes['<']['int'] = IF_INT_LESS
         self.relationCodes['>']['int'] = IF_INT_GREATER
@@ -283,12 +280,6 @@ class Translator(object):
 
         out.write(".class public Main\n")
         out.write(".super java/lang/Object\n")
-
-        out.write('''.method public <init>()V
-    aload_0
-    invokenonvirtual java/lang/Object/<init>()V
-    return
-.end method\n\n''')
 
         for function in self.functions:
             out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
