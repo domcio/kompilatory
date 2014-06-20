@@ -1,9 +1,18 @@
 int i = 1, j = 2;
 
-int fun(int a) {
-    return 1;
+string fun() {
+    return "Hello";
 }
 
-print "Hello";
-i = i + 1;
-j = 1 + i;
+int add(int a) {
+    return a + 1;
+}
+
+i = 5;
+while (i > 0) {
+    print "Hello";
+    print i;
+    i = i - 1;
+}
+i = add(i);
+print i;

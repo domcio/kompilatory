@@ -240,8 +240,8 @@ class Cparser(object):
     def p_args_list_or_empty(self, p):
         """args_list_or_empty : args_list
                               | """
-        if len(p)==0:
-            p[0] = None
+        if len(p)==1:
+            p[0] = AST.ArgumentList()
         else:
             p[0] = p[1]
             

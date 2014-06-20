@@ -189,6 +189,10 @@ class Translator(object):
         self.loadStoreCodes['load']['string'] = PUSH_STR
         self.loadStoreCodes['loadn']['string'] = PUSH_STR_N
 
+
+    def callPrint(self, type):
+        return 'invokevirtual java/io/PrintStream/println(' + self.getShortTypeName(type) + ')V'
+
     def getShortTypeName(self, type):
         return type[0].upper() if type != "string" else "Ljava/lang/String;"
 
@@ -199,7 +203,7 @@ class Translator(object):
 
     def getMethodForCall(self, name):
         function = filter(lambda x: x.name == name, self.functions)[0]
-        return PACKAGE_NAME + "/Main/" + self.getMethodNameArgs(function)
+        return PACKAGE_NAME + "Main/" + self.getMethodNameArgs(function)
 
 
     def printInstruction(self, instr, arg=None):  # non-jump instruction
@@ -266,14 +270,8 @@ class Translator(object):
                 command.arg = self.labels[command.arg]
 
 
-    def printCommands(self):
-        # lineno = 0
-        # for cmd in self.commands:
-        # argstr = '' if cmd.arg is None else str(cmd.arg)
-        # print str(lineno) + ":\t" + cmd.code + ' ' + argstr
-        # lineno+=1
-
-        out = open("Main.j", "w")
+    def printCommands(self, file):
+        out = open(file, "w")
 
         out.write(".class public Main\n")
         out.write(".super java/lang/Object\n")
@@ -282,7 +280,7 @@ class Translator(object):
     aload_0
     invokenonvirtual java/lang/Object/<init>()V
     return
-.end method\n''')
+.end method\n\n''')
 
         for function in self.functions:
             out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
@@ -290,7 +288,7 @@ class Translator(object):
             out.write(".limit locals 5\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
-            out.write(".end method\n")
+            out.write(".end method\n\n")
         out.close()
 
     def printConstants(self):
@@ -299,11 +297,11 @@ class Translator(object):
             print str(i) + ' = ' + self.stack.constants[i]
 
 
-    def printEndCode(self):  # optimize and print instructions
+    def printEndCode(self, file):  # optimize and print instructions
         # self.optimizeJumps()
         # self.resolveLabels()
         # self.printConstants()
-        self.printCommands()
+        self.printCommands(file)
 
 
     def getLabelName(
@@ -395,10 +393,9 @@ class Translator(object):
 
     @when(AST.PrintInstr)
     def visit(self, node):
-        self.printInstruction(GET_PRINT)  # TODO maybe do this a little nicer?
-        node.expr.accept(self)  # get the result of expression on the stack
-        self.printInstruction(CALL_PRINT)
-
+        self.printInstruction(GET_PRINT)
+        type = node.expr.accept(self)  # get the result of expression on the stack
+        self.printInstruction(self.callPrint(type))
 
     @when(AST.LabeledInstr)  # pointless...
     def visit(self, node):
@@ -509,8 +506,8 @@ class Translator(object):
 
     @when(AST.BinExpr)
     def visit(self, node):
-        ltype = node.right.accept(self)
         rtype = node.left.accept(self)
+        ltype = node.right.accept(self)
         if (ltype == rtype):
             self.printOperation(node.op, ltype)
             return ltype
@@ -523,8 +520,8 @@ class Translator(object):
 
     @when(AST.RelExpr)
     def visit(self, node):  # push the two sides onto the stack, surrounding if will make the comparison and jump
-        ltype = node.right.accept(self)
         rtype = node.left.accept(self)
+        ltype = node.right.accept(self)
         if (ltype == rtype):
             return ltype
         elif (ltype == 'int' and rtype == 'float') or (rtype == 'int' and ltype == 'float'):

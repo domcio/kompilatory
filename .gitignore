@@ -1,3 +1,6 @@
 .idea/
 *.pyc
 *.j
+*.class
+*.out
+parsetab.py
