@@ -27,9 +27,7 @@ while(i < 10) {
 	print str;
     print "i";
 	print add(str, str2);
-    if (i == 5)
-        break;
-	while(j < 10) {
+ 	while(j < 10) {
 		j = j + 1;
 		print "j";
 		if (j == 5)

@@ -230,7 +230,7 @@ class Translator(object):
         for function in self.functions:
             out.write(".method public static " + get_method_name_args(function) + "\n")
             out.write(".limit stack 5\n")
-            out.write(".limit locals " + str(function.variables) + "\n")
+            out.write(".limit locals " + str(function.variables + 2) + "\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
             out.write(".end method\n\n")
@@ -408,11 +408,11 @@ class Translator(object):
             self.print_instruction(RETURN_STR)
 
     @when(AST.ContinueInstr)
-    def visit(self):
+    def visit(self, node):
         self.print_jump(GOTO, self.continue_label)
 
     @when(AST.BreakInstr)
-    def visit(self):
+    def visit(self, node):
         self.print_jump(GOTO, self.break_label)
 
     @when(AST.CompoundInstr)
