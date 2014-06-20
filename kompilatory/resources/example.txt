@@ -1,5 +1,5 @@
 
-int a = 100, b = 200, c = 300;
+int a = 100;
 
 int gcd(int m, int n) {
 
@@ -17,6 +17,11 @@ print res;
 return res;
 }
 
-while(a >= b ) {
-    a = 1/2*(a+b/a);
+int fun(int a) {
+    return a / 2;
+}
+
+while (a > 0) {
+    print fun(a);
+    a = a - 1;
 }

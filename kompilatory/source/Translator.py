@@ -102,13 +102,14 @@ class Function(object):
         self.type = type
         self.code = []
         self.arguments = []
+        self.variables = 0
 
     def addInstruction(self, instr):
         self.code.append(instr)
 
     def addArgument(self, arg):
         self.arguments.append(arg)
-
+        self.variables += 1
 
 class BInstruction(object):
     def __init__(self, cmd, arg=None):
@@ -186,8 +187,6 @@ class Translator(object):
         self.loadStoreCodes['loadn']['float'] = PUSH_FLO_N
         self.loadStoreCodes['load']['string'] = PUSH_STR
         self.loadStoreCodes['loadn']['string'] = PUSH_STR_N
-        self.variables = 0
-
 
     def callPrint(self, type):
         return 'invokevirtual java/io/PrintStream/println(' + self.getShortTypeName(type) + ')V'
@@ -224,7 +223,7 @@ class Translator(object):
         for function in self.functions:
             out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
             out.write(".limit stack 5\n")
-            out.write(".limit locals " + str(self.variables) + "\n")
+            out.write(".limit locals " + str(function.variables) + "\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
             out.write(".end method\n\n")
@@ -315,9 +314,8 @@ class Translator(object):
     def visit(self, node):
         value = node.expr.accept(self)  # compute the expression
         index = self.stack.register(node.id, self.currType)
-        self.variables += 1
+        self.functions[-1].variables += 1
         self.storeTopOfStack(node.id)  # put what we have on top of stack in the index
-
 
     @when(AST.InstructionList)
     def visit(self, node):
@@ -482,10 +480,9 @@ class Translator(object):
             # push the arguments onto the stack
             for expr in node.inside.expressions:
                 expr.accept(self)
-        lookup = self.stack.lookupFun(node.id)
+        function = filter(lambda x: x.name == node.id, self.functions)[0]
         self.printInstruction(STATIC_CALL, self.getMethodForCall(node.id))
-        return lookup[0]
-
+        return function.type
 
     @when(AST.Const)
     def visit(self, node):
@@ -506,18 +503,12 @@ class Translator(object):
 
     @when(AST.Float)
     def visit(self, node):  # todo use the fconst_0-2 codes
-        if self.stack.lookupConstant(node.value) is None:
-            self.stack.registerConstant(node.value)
-        index = self.stack.lookupConstant(node.value)
         self.printInstruction(PUSH_CONST, node.value)
         return 'float'
 
 
     @when(AST.String)
     def visit(self, node):
-        if self.stack.lookupConstant(node.value) is None:
-            self.stack.registerConstant(node.value)
-        index = self.stack.lookupConstant(node.value)
         self.printInstruction(PUSH_CONST, node.value)
         return 'string'
 
@@ -528,19 +519,16 @@ class Translator(object):
         self.loadOntoStack(node.value)
         return lookup[0]
 
-
     @when(AST.FunDefList)
     def visit(self, node):
         for fundef in node.fundefs:
             fundef.accept(self)
 
-
     @when(AST.FunDef)
     def visit(self, node):
-        newFunction = Function(node.id, node.type)
-        self.functions.append(newFunction)
+        function = Function(node.id, node.type)
+        self.functions.append(function)
         self.addArguments(node.args)
-        self.stack.registerFun(node.id, node.type, self.lineno)
         self.stack.push(Memory('mem1'))
         node.args.accept(self)
         node.comp_instrs.accept(self)
