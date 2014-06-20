@@ -76,7 +76,7 @@ IF_INT_GREATER = 'if_icmpgt'
 IF_INT_LEQUAL = 'if_icmple'
 IF_STR_EQUAL = 'if_acmpeq'
 IF_STR_NEQUAL = 'if_acmpne'
-PACKAGE_NAME = "some/package"
+PACKAGE_NAME = ""
 GOTO = 'goto'
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
@@ -86,7 +86,7 @@ GOTO_VAR = 'ret'  # executes from the address in the variable n - unnecessary sh
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
 RETURN_STR = 'areturn'
-GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream'
+GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
 CALL_PRINT = 'invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V'
 
 
@@ -276,8 +276,17 @@ class Translator(object):
 
         out.write(".class public Main\n")
         out.write(".super java/lang/Object\n")
+
+        out.write('''.method public <init>()V
+    aload_0
+    invokenonvirtual java/lang/Object/<init>()V
+    return
+.end method\n''')
+
         for function in self.functions:
-            out.write(".method public static " + self.getMethodNameArgs(function)+"\n")
+            out.write(".method public static " + self.getMethodNameArgs(function) + "\n")
+            out.write(".limit stack 5\n")
+            out.write(".limit locals 5\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
             out.write(".end method\n")
@@ -329,7 +338,7 @@ class Translator(object):
 
 
     def makeComparisonAndJump(self, type, operation, label):
-        if type== "float":
+        if type == "float":
             op = COMP_FLO_GR if operation[0] == '>' else COMP_FLO_LE
             self.printInstruction(op)
         self.printJump(self.relationCodes[operation][type], label)
