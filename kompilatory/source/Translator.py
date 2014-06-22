@@ -109,7 +109,6 @@ class Function(object):
 
     def add_argument(self, arg):
         self.arguments.append(arg)
-        self.variables += 1
 
 
 class BInstruction(object):
@@ -230,7 +229,7 @@ class Translator(object):
         for function in self.functions:
             out.write(".method public static " + get_method_name_args(function) + "\n")
             out.write(".limit stack 5\n")
-            out.write(".limit locals " + str(function.variables + 2) + "\n")
+            out.write(".limit locals " + str(function.variables) + "\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
             out.write(".end method\n\n")
@@ -298,6 +297,7 @@ class Translator(object):
         self.functions.append(Function("main", "void"))
         node.declarations.accept(self)
         node.instructions.accept(self)
+        self.functions[-1].variables = self.stack.get_variables()
         self.print_instruction(RETURN)
 
     @when(AST.DeclarationList)
@@ -319,7 +319,6 @@ class Translator(object):
     def visit(self, node):
         node.expr.accept(self)  # compute the expression
         self.stack.register(node.id, self.current_init_type)
-        self.functions[-1].variables += 1
         self.store_top_of_stack(node.id)  # put what we have on top of stack in the index
 
     @when(AST.InstructionList)
@@ -506,9 +505,10 @@ class Translator(object):
         function = Function(node.id, node.type)
         self.functions.append(function)
         self.add_arguments(node.args)
-        self.stack.push(Memory('mem1'))
+        self.stack.push(Memory(node.id))
         node.args.accept(self)
         node.comp_instrs.accept(self)
+        self.functions[-1].variables = self.stack.get_variables()
         self.stack.pop()
 
     @when(AST.ArgumentList)
