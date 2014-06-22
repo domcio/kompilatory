@@ -99,12 +99,24 @@ class Function(object):
         self.code = []
         self.arguments = []
         self.variables = 0
+        self.stack = 0
+        self.max_stack = 0
 
     def add_instruction(self, instr):
         self.code.append(instr)
 
     def add_argument(self, arg):
         self.arguments.append(arg)
+
+    def inc_stack(self):
+        self.stack += 1
+        self.max_stack = max(self.stack, self.max_stack)
+
+    def dec_stack(self):
+        self.stack -= 1
+
+    def dec_stack_n(self, n):
+        self.stack -= n
 
 
 class BInstruction(object):
@@ -223,7 +235,7 @@ class Translator(object):
 
         for function in self.functions:
             out.write(".method public static " + get_method_name_args(function) + "\n")
-            out.write(".limit stack 5\n")
+            out.write(".limit stack " + str(function.max_stack) + "\n")
             out.write(".limit locals " + str(function.variables) + "\n")
             for cmd in function.code:
                 out.write(cmd.tostring() + "\n")
@@ -235,7 +247,8 @@ class Translator(object):
         self.labelno += 1
         return name
 
-    def store_top_of_stack(self, name):
+    def pop_stack(self, name):
+        self.functions[-1].dec_stack()
         lookup = self.stack.lookup(name)
         variable_type = lookup[0]
         index = lookup[1]
@@ -245,7 +258,8 @@ class Translator(object):
             code = self.loadStoreCodes['store'][variable_type]
         self.print_instruction(code, str(index) if index >= 4 else None)
 
-    def load_onto_stack(self, name):
+    def push_to_stack(self, name):
+        self.functions[-1].inc_stack()
         lookup = self.stack.lookup(name)
         variable_type = lookup[0]
         index = lookup[1]
@@ -262,20 +276,21 @@ class Translator(object):
         if sides_type == "float":
             op = COMP_FLO_GR if operation[0] == '>' else COMP_FLO_LE
             self.print_instruction(op)
+        self.functions[-1].dec_stack()
         self.print_jump(self.relationCodes[operation][sides_type], label)
 
     def print_operation(self, operation, sides_type):
         if sides_type == 'string' and operation == '+':
             self.stack.register("___string1", "string")
             self.stack.register("___string2", "string")
-            self.store_top_of_stack("___string1")
-            self.store_top_of_stack("___string2")
+            self.pop_stack("___string1")
+            self.pop_stack("___string2")
             self.print_instruction(NEW, STRING_BUILDER)
             self.print_instruction(DUP)
             self.print_instruction(SPECIAL_CALL, STRING_BUILDER + "/" + INIT)
-            self.load_onto_stack("___string2")
+            self.push_to_stack("___string2")
             self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
-            self.load_onto_stack("___string1")
+            self.push_to_stack("___string1")
             self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + APPEND_PROTOTYPE)
             self.print_instruction(VIRTUAL_CALL, STRING_BUILDER + "/" + TO_STRING_PROTOTYPE)
         else:
@@ -313,7 +328,7 @@ class Translator(object):
     def visit(self, node):
         node.expr.accept(self)  # compute the expression
         self.stack.register(node.id, self.current_init_type)
-        self.store_top_of_stack(node.id)  # put what we have on top of stack in the index
+        self.pop_stack(node.id)  # put what we have on top of stack in the index
 
     @when(AST.InstructionList)
     def visit(self, node):
@@ -325,6 +340,7 @@ class Translator(object):
         self.print_instruction(GET_PRINT)
         expression_type = node.expr.accept(self)  # get the result of expression on the stack
         self.print_instruction(call_print(expression_type))
+        self.functions[-1].dec_stack_n(2)
 
     @when(AST.LabeledInstr)
     def visit(self, node):
@@ -335,7 +351,7 @@ class Translator(object):
     @when(AST.Assignment)
     def visit(self, node):
         node.expr.accept(self)
-        self.store_top_of_stack(node.id)
+        self.pop_stack(node.id)
 
     # we assume the condition will always be inside if, not another expression or condition
     # because otherwise we don't have a way to store the intermediate boolean values (no bool :#)
@@ -424,6 +440,7 @@ class Translator(object):
     def visit(self, node):
         rtype = node.left.accept(self)
         ltype = node.right.accept(self)
+        self.functions[-1].dec_stack()
         if ltype == rtype:
             self.print_operation(node.op, ltype)
             return ltype
@@ -450,12 +467,15 @@ class Translator(object):
 
     @when(AST.FunCallExpr)
     def visit(self, node):
+        args = 0
         if node.inside is not None:
             # push the arguments onto the stack
             for expr in node.inside.expressions:
                 expr.accept(self)
+            args = len(node.inside.expressions)
         function = filter(lambda x: x.name == node.id, self.functions)[0]
         self.print_instruction(STATIC_CALL, self.get_method_for_call(node.id))
+        self.functions[-1].dec_stack_n(args + 1)
         return function.type
 
     @when(AST.Const)
@@ -465,6 +485,7 @@ class Translator(object):
     @when(AST.Integer)
     def visit(self, node):
         val = int(node.value)
+        self.functions[-1].inc_stack()
         if 6 > val > -2:
             self.print_instruction(PUSH_INT_CONST[val + 1])
         elif -129 < val < 128:
@@ -475,18 +496,20 @@ class Translator(object):
 
     @when(AST.Float)
     def visit(self, node):  # todo use the fconst_0-2 codes
+        self.functions[-1].inc_stack()
         self.print_instruction(PUSH_CONST, node.value)
         return 'float'
 
     @when(AST.String)
     def visit(self, node):
+        self.functions[-1].inc_stack()
         self.print_instruction(PUSH_CONST, node.value)
         return 'string'
 
     @when(AST.Variable)
     def visit(self, node):
         lookup = self.stack.lookup(node.value)
-        self.load_onto_stack(node.value)
+        self.push_to_stack(node.value)
         return lookup[0]
 
     @when(AST.FunDefList)
