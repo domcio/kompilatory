@@ -5,7 +5,6 @@ class Memory:
         self.variables = 0
         
     def register(self, name, type):
-        print 'registering ' + name + ' ' + type
         registered_names = map(lambda x: x[0], filter(lambda x: x is not None, self.memory))
         if name in registered_names:
             print 'error - redeclaration of variable'
@@ -14,7 +13,6 @@ class Memory:
         index = self.memory.index(None)
         self.memory[index] = (name, type)
         self.variables += 1
-        print 'variables is now ' + str(self.variables)
         return index
         
     def lookup(self, name):
@@ -27,8 +25,9 @@ class Memory:
     def has_key(self, name):
         return name in map(lambda x: x[0], filter(lambda x: x is not None, self.memory))
 
+
 class MemoryStack:
-    
+
     def __init__(self, memory=None):  # initialize memory stack with memory <memory>
         self.stack = []
         if memory is not None:

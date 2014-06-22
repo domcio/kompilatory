@@ -9,11 +9,6 @@ from visit import *
 # ideas for optimisation:
 # - use iinc instead of the pattern: iconst iload_1 iadd istore_1
 # - get rid of series of goto's, like in if (condition) break;, we want to have one big jump
-# enhancements:
-# - implement nested breaks, continues - easy peasy :3
-# - add argument to break, possibly continue - also easy
-# - nested conditions ((a < b) || (c > d))?
-# - ... for loop :P
 
 PUSH_INT_CONST = ['iconst_m1', 'iconst_0', 'iconst_1', 'iconst_2', 'iconst_3', 'iconst_4', 'iconst_5']
 PUSH_FLO_CONST = ['fconst_0', 'fconst_1', 'fconst_2']
@@ -71,11 +66,11 @@ IF_INT_GREATER = 'if_icmpgt'
 IF_INT_LEQUAL = 'if_icmple'
 IF_STR_EQUAL = 'if_acmpeq'
 IF_STR_NEQUAL = 'if_acmpne'
-GOTO = 'goto'
+GO_TO = 'goto'
 
 JUMP_INSTR = [COMP_FLO_LE, COMP_FLO_GR, IF_ZERO, IF_NOT_ZERO, IF_NEGATIVE, IF_NONNEGATIVE, IF_POSITIVE, IF_NONPOSITIVE,
               IF_INT_EQUAL, IF_INT_NEQUAL, IF_INT_LESS, IF_INT_GEQUAL, IF_INT_GREATER, IF_INT_LEQUAL, IF_STR_EQUAL,
-              IF_STR_NEQUAL, GOTO]
+              IF_STR_NEQUAL, GO_TO]
 RETURN_INT = 'ireturn'
 RETURN_FLO = 'freturn'
 RETURN_STR = 'areturn'
@@ -88,6 +83,7 @@ PACKAGE_NAME = ""
 STATIC_CALL = 'invokestatic'
 SPECIAL_CALL = 'invokespecial'
 VIRTUAL_CALL = 'invokevirtual'
+
 INIT = '<init>()V'
 GET_PRINT = 'getstatic java/lang/System/out Ljava/io/PrintStream;'
 CALL_PRINT = VIRTUAL_CALL + ' java/io/PrintStream/println(Ljava/lang/String;)V'
@@ -145,9 +141,8 @@ def get_method_name_args(function):
 
 class Translator(object):
     def __init__(self):
-        self.stack = MemoryStack(Memory('mem1'))
+        self.stack = MemoryStack(Memory('main'))
         self.labelno = 0
-        self.lineno = 0
         self.functions = []
         self.current_init_type = ''
         self.break_label = None
@@ -269,7 +264,6 @@ class Translator(object):
             self.print_instruction(op)
         self.print_jump(self.relationCodes[operation][sides_type], label)
 
-    # this is ugly, but the Java compiler does this similarly
     def print_operation(self, operation, sides_type):
         if sides_type == 'string' and operation == '+':
             self.stack.register("___string1", "string")
@@ -332,7 +326,7 @@ class Translator(object):
         expression_type = node.expr.accept(self)  # get the result of expression on the stack
         self.print_instruction(call_print(expression_type))
 
-    @when(AST.LabeledInstr)  # pointless...
+    @when(AST.LabeledInstr)
     def visit(self, node):
         label = self.get_label_name()
         self.print_label(label)
@@ -352,7 +346,7 @@ class Translator(object):
             thenend = self.get_label_name()
             thenstart = self.get_label_name()
             self.make_comparison_and_jump(condition_type, node.ifclause.op, thenstart)
-            self.print_jump(GOTO, thenend)
+            self.print_jump(GO_TO, thenend)
             self.print_label(thenstart)
             node.thenclause.accept(self)
             self.print_label(thenend)
@@ -363,10 +357,10 @@ class Translator(object):
             elseend = self.get_label_name()
 
             self.make_comparison_and_jump(condition_type, node.ifclause.op, thenstart)
-            self.print_jump(GOTO, elsestart)
+            self.print_jump(GO_TO, elsestart)
             self.print_label(thenstart)
             node.thenclause.accept(self)
-            self.print_jump(GOTO, elseend)
+            self.print_jump(GO_TO, elseend)
             self.print_label(elsestart)
             node.elseclause.accept(self)
             self.print_label(elseend)
@@ -382,10 +376,10 @@ class Translator(object):
         self.print_label(condition)
         condition_type = node.condition.accept(self)
         self.make_comparison_and_jump(condition_type, node.condition.op, start)
-        self.print_jump(GOTO, end)
+        self.print_jump(GO_TO, end)
         self.print_label(start)
         node.instruction.accept(self)
-        self.print_jump(GOTO, condition)
+        self.print_jump(GO_TO, condition)
         self.print_label(end)
 
     @when(AST.ReturnInstr)
@@ -408,11 +402,11 @@ class Translator(object):
 
     @when(AST.ContinueInstr)
     def visit(self, node):
-        self.print_jump(GOTO, self.continue_label)
+        self.print_jump(GO_TO, self.continue_label)
 
     @when(AST.BreakInstr)
     def visit(self, node):
-        self.print_jump(GOTO, self.break_label)
+        self.print_jump(GO_TO, self.break_label)
 
     @when(AST.CompoundInstr)
     def visit(self, node):
