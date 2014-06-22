@@ -33,8 +33,8 @@ class Cparser(object):
             print("Syntax error at line {0}, column {1}: LexToken({2}, '{3}')".format(p.lineno, self.scanner.find_tok_column(p), p.type, p.value))
         else:
             print('At end of input')
+        exit(-1)
 
-			
     def p_program(self, p):
         """program : declarations fundefs instructions"""
         if len(p[1].declarations) == 0:
