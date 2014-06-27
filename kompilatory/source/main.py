@@ -4,6 +4,7 @@ import ply.yacc as yacc
 
 from Cparser import Cparser
 from Translator import Translator
+from source.TypeChecker import TypeChecker
 
 
 if __name__ == '__main__':
@@ -23,5 +24,6 @@ if __name__ == '__main__':
     ast = parser.parse(text, lexer=Cparser.scanner)
 
     translator = Translator()
+    # ast.accept2(TypeChecker())
     ast.accept(translator)
     translator.print_commands(sys.argv[2] if len(sys.argv) > 2 else "../out/Main.j")
