@@ -4,7 +4,6 @@ import ply.yacc as yacc
 
 from Cparser import Cparser
 from Translator import Translator
-from source.TypeChecker import TypeChecker
 
 
 if __name__ == '__main__':
